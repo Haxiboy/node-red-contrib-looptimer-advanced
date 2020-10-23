@@ -1,0 +1,67 @@
+<script type="text/javascript">
+	RED.nodes.registerType('looptimer-advanced',{
+		category: 'function',
+		color:"#33B2FF",
+		defaults: {
+			duration: {value:"5",required:true,validate:RED.validators.number()},
+			units: {value:"Second"},
+			maxloops: {value:"100",required:false,validate:RED.validators.number()},
+			maxtimeout: {value:"1",required:false,validate:RED.validators.number()},
+			maxtimeoutunits: {value:"Hour"},
+			name: {value:""}
+		},
+		inputs:1,
+		outputs:2,
+		icon: "looptimer_advanced.png",
+		label: function() {
+			return this.name || this.duration + " " + this.units + " Loop";
+		},
+		labelStyle: function() {
+			return this.name?"node_label_italic":"";
+		},
+		outputLabels: ["original msg","stopped msg"]
+	});
+</script>
+
+<script type="text/x-red" data-template-name="looptimer-advanced">
+	<div class="form-row">
+		<label for="node-input-duration"><i class="fa fa-clock-o"></i> Loop Every</label>
+		<input type="text" id="node-input-duration" style="text-align:end; width:70px !important">
+		<select id="node-input-units" style="width:140px !important">
+			<option value="Milisecond">Miliseconds</option>
+			<option value="Second">Seconds</option>
+			<option value="Minute">Minutes</option>
+			<option value="Hour">Hours</option>
+			<option value="Day">Days</option>
+		</select>
+	</div>
+	<div class="form-row">
+		<label for="node-input-maxloops"><i class="fa fa-repeat"></i> Max Loops</label>
+		<input type="text" id="node-input-maxloops" style="text-align:end; width:70px !important">
+	</div>
+	<div class="form-row">
+		<label for="node-input-maxtimeout"><i class="fa fa-clock-o"></i> Max Timeout</label>
+		<input type="text" id="node-input-maxtimeout" style="text-align:end; width:70px !important">
+		<select id="node-input-maxtimeoutunits" style="width:140px !important">
+			<option value="Milisecond">Miliseconds</option>
+			<option value="Second">Seconds</option>
+			<option value="Minute">Minutes</option>
+			<option value="Hour">Hours</option>
+			<option value="Day">Days</option>
+		</select>
+	</div>
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name"></input>
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="looptimer-advanced">
+    <p>Sends the <code>msg</code> through the first output, then continues to do so in a loop, once per the timer duration specified, until a payload of <code>stop</code> or <code>STOP</code> is received, at which time the second output will automatically send a payload of <code>stopped</code>.
+	<p>You can also stop the loop by specifying a maximum number of loops, which when reached, will stop the loop and timer, as well as sending a payload of <code>max loops reached</code> through the second output. Keep in mind, the first <code>msg</code> simply passes through, and is therefore not part of the loop. So if you set the max loops to <code>5</code>, you will get <code>6 messages</code>, which is 1 original message, and 5 messages from the loop.</p>
+	<p>Finally, to ensure you do not end up with an infinite loop, you can set a maximum timeout in seconds, minutes or hours, and when that time is reached, the loop and timer will also be stopped.</p>
+	<p>Properties can be overridden via <code>msg.loop</code> messages supplemented with property name.</p>
+	<p>Accepted messages for loop are <code>msg.loop.duration</code> and <code>msg.loop.units</code></p>
+	<p>For timeout you can use <code>msg.loop.maxtimeout</code> and <code>msg.loop.maxtimeoutunits</code></p>
+	<p><code>NOTE:</code> Setting the Max Loops and Max Timeout settings to high values can, for all intents, ensure that the loop can only be stopped by an incoming <code>stop</code> payload, however, the stability of the loop has not been tested over an extended number of hours.</p>
+</script>
