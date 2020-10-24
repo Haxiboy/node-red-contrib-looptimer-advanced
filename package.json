@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-looptimer-advanced",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Sends the msg through the first output, then continues to do so in a loop, once per the duration specified, until a payload of 'stop' or 'STOP' is received. Supports override with messages!",
   "main": "looptimer_advanced.js",
   "scripts": {},
