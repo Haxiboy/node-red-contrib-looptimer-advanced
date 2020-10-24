@@ -14,13 +14,19 @@
     "timer",
     "advanced"
   ],
-  "author": {
-    "name": "Haxiboy"
-  },
+  "author": "Haxiboy",
   "license": "Apache-2.0",
   "node-red": {
     "nodes": {
       "looptimer-advanced": "looptimer_advanced.js"
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Haxiboy/node-red-contrib-looptimer-advanced.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/issues"
+  },
+  "homepage": "https://github.com/Haxiboy/node-red-contrib-looptimer-advanced#readme"
 }

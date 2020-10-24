@@ -69,4 +69,4 @@ Setting the Max Loops and Max Timeout settings to high values can, for all inten
   
   
 
-[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png =200x)](https://www.buymeacoffee.com/haxiboy)
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/haxiboy)
