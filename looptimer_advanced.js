@@ -37,6 +37,7 @@ module.exports = function (RED) {
         var cpmsg = null;
         var stopmsg = null;
         var mlmsg = null;
+        var tomsg = null;
 
         this.on("input", function (msg) {
             loop = Looper();
@@ -146,9 +147,16 @@ module.exports = function (RED) {
                                 } else {
                                     node.status({});
                                     if ((data * node.nodeduration) <= node.nodemaxtimeout) {
-                                        node.send([cpmsg, null]);
                                         timeout = null;
                                         if (((data + 1) * node.nodeduration) > node.nodemaxtimeout) {
+                                            stopmsg = RED.util.cloneMessage(msg);
+                                            stopmsg.payload = 'timeout';
+                                            node.send([cpmsg, stopmsg]);
+                                            node.status({
+                                                fill: "red",
+                                                shape: "ring",
+                                                text: "timeout reached"
+                                            });
                                             next("break");
                                         } else {
                                             next(undefined, data);
