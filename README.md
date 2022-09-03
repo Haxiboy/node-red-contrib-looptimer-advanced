@@ -53,7 +53,7 @@ Setting the Max Loops and Max Timeout settings to high values can, for all inten
   
 
   
-**0.0.4** - Issue #4 -> Added message when timeout reached
+**0.0.4** - Issue #4 -> Added message when timeout reached  
 **0.0.1** - Initial Release
 
 
@@ -63,11 +63,5 @@ Setting the Max Loops and Max Timeout settings to high values can, for all inten
 
 **To Do:**
 
-- [ ] Mustache Template Support
-
+- [ ] Mustache Template Support  
 - [ ] Example Flows
-
-  
-  
-
-[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/haxiboy)
