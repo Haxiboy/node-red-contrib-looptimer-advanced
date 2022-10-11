@@ -52,7 +52,7 @@ Setting the Max Loops and Max Timeout settings to high values can, for all inten
 
   
 
-  
+**0.0.5** - Re-added line removed accidentally  
 **0.0.4** - Issue #4 -> Added message when timeout reached  
 **0.0.1** - Initial Release
 

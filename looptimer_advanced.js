@@ -147,6 +147,7 @@ module.exports = function (RED) {
                                 } else {
                                     node.status({});
                                     if ((data * node.nodeduration) <= node.nodemaxtimeout) {
+                                        node.send([cpmsg, null]);
                                         timeout = null;
                                         if (((data + 1) * node.nodeduration) > node.nodemaxtimeout) {
                                             stopmsg = RED.util.cloneMessage(msg);
