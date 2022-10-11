@@ -1,0 +1,323 @@
+[
+  {
+    "id": "8eb4d9d.d1c3528",
+    "type": "tab",
+    "label": "Looptimer Example Flows",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "3acf3795.a4aff8",
+    "type": "looptimer-advanced",
+    "z": "8eb4d9d.d1c3528",
+    "duration": "1",
+    "units": "Second",
+    "maxloops": "10",
+    "maxtimeout": "10",
+    "maxtimeoutunits": "Hour",
+    "name": "Loop every second, 10 times max, 10 hours timeout",
+    "x": 750,
+    "y": 320,
+    "wires": [["ab782534.38ffd8"], ["ab782534.38ffd8"]]
+  },
+  {
+    "id": "ab782534.38ffd8",
+    "type": "debug",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1350,
+    "y": 400,
+    "wires": []
+  },
+  {
+    "id": "d6e5e6d3.320558",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "stop",
+    "payloadType": "str",
+    "x": 210,
+    "y": 340,
+    "wires": [["3acf3795.a4aff8"]]
+  },
+  {
+    "id": "31b03ef0.71ba92",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "STOP",
+    "payloadType": "str",
+    "x": 210,
+    "y": 300,
+    "wires": [["3acf3795.a4aff8"]]
+  },
+  {
+    "id": "96cc2144.e0013",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "Start",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "Test",
+    "payloadType": "str",
+    "x": 210,
+    "y": 260,
+    "wires": [["3acf3795.a4aff8"]]
+  },
+  {
+    "id": "2c547dc704ab931a",
+    "type": "looptimer-advanced",
+    "z": "8eb4d9d.d1c3528",
+    "duration": "1",
+    "units": "Second",
+    "maxloops": "5",
+    "maxtimeout": "10",
+    "maxtimeoutunits": "Second",
+    "name": "Loop every second, 9999999 times max 10 sec timeout",
+    "x": 760,
+    "y": 480,
+    "wires": [["ab782534.38ffd8"], ["ab782534.38ffd8"]]
+  },
+  {
+    "id": "f3cdcd5180fee968",
+    "type": "looptimer-advanced",
+    "z": "8eb4d9d.d1c3528",
+    "duration": "1",
+    "units": "Second",
+    "maxloops": "100",
+    "maxtimeout": "10",
+    "maxtimeoutunits": "Hour",
+    "name": "Loop properties overwritten [100 max loop 10 hours timeout by default]",
+    "x": 810,
+    "y": 620,
+    "wires": [["ab782534.38ffd8"], ["ab782534.38ffd8"]]
+  },
+  {
+    "id": "f7ca9015f3d57831",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "stop",
+    "payloadType": "str",
+    "x": 210,
+    "y": 520,
+    "wires": [["2c547dc704ab931a"]]
+  },
+  {
+    "id": "6c2a777d38da5c41",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "STOP",
+    "payloadType": "str",
+    "x": 210,
+    "y": 480,
+    "wires": [["2c547dc704ab931a"]]
+  },
+  {
+    "id": "bffb05b96d6cc706",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "Start",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "Test",
+    "payloadType": "str",
+    "x": 210,
+    "y": 440,
+    "wires": [["2c547dc704ab931a"]]
+  },
+  {
+    "id": "aa0c1129383c9b9a",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "stop",
+    "payloadType": "str",
+    "x": 390,
+    "y": 740,
+    "wires": [["f3cdcd5180fee968"]]
+  },
+  {
+    "id": "54c5d386c3ce186b",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "STOP",
+    "payloadType": "str",
+    "x": 390,
+    "y": 700,
+    "wires": [["f3cdcd5180fee968"]]
+  },
+  {
+    "id": "a713da09b92a38ac",
+    "type": "inject",
+    "z": "8eb4d9d.d1c3528",
+    "name": "Start",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "Test",
+    "payloadType": "str",
+    "x": 210,
+    "y": 600,
+    "wires": [["93e07e9c2af62b2b"]]
+  },
+  {
+    "id": "93e07e9c2af62b2b",
+    "type": "change",
+    "z": "8eb4d9d.d1c3528",
+    "name": "Change Properties",
+    "rules": [
+      {
+        "t": "set",
+        "p": "loop.duration",
+        "pt": "msg",
+        "to": "10",
+        "tot": "num"
+      },
+      {
+        "t": "set",
+        "p": "msg.loop.units",
+        "pt": "msg",
+        "to": "Millisecond",
+        "tot": "str"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 410,
+    "y": 600,
+    "wires": [["f3cdcd5180fee968"]]
+  }
+]
