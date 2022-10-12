@@ -51,7 +51,7 @@ You can define maximum number of loops with `msg.loop.maxloops`
 Setting the Max Loops and Max Timeout settings to high values can, for all intents, ensure that the loop can only be stopped by an incoming `stop` payload, however, the stability of the loop has not been tested over an extended number of hours.
 
   
-**0.0.6** - Added Example Flow and updated dependencies
+**0.0.6** - Added Example Flow and updated dependencies  
 **0.0.5** - Re-added line removed accidentally  
 **0.0.4** - Issue #4 -> Added message when timeout reached  
 **0.0.1** - Initial Release
