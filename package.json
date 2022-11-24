@@ -5,7 +5,7 @@
   "main": "looptimer_advanced.js",
   "scripts": {},
   "dependencies": {
-    "loop": "^3.3.6"
+    "loop": "2.1.2"
   },
   "directories": {},
   "keywords": [

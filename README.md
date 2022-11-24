@@ -51,7 +51,7 @@ You can define maximum number of loops with `msg.loop.maxloops`
 Setting the Max Loops and Max Timeout settings to high values can, for all intents, ensure that the loop can only be stopped by an incoming `stop` payload, however, the stability of the loop has not been tested over an extended number of hours.
   
 
-  
+**0.0.8** - Fix Until Node-Red Does Not Get Fixed on issue #3867
 **0.0.7** - Update Loop Dependency version as older version is not compatible with higher version Node.JS  
 **0.0.6** - Added Example Flow and updated dependencies  
 **0.0.5** - Re-added line removed accidentally  
