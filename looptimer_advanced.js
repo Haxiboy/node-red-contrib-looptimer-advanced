@@ -10,7 +10,13 @@ module.exports = function (RED) {
         { unit: "Day", multiplier: 24, get duration() { return unitMap[3].duration * unitMap[4].multiplier } }
     ]
 
-    var CalcDuration = function (unit, duration) { return (unitMap.find(o => o.unit === unit).duration * duration); }
+    var CalcDuration = function (unit, duration) {
+        const unitObj = unitMap.find(o => o.unit === unit);
+        if (!unitObj) {
+            throw new Error(`Invalid unit: ${unit}`);
+        }
+        return unitObj.duration * duration;
+    };
     function LoopTimer(n) {
         RED.nodes.createNode(this, n);
 
@@ -44,11 +50,11 @@ module.exports = function (RED) {
             if (msg.loop != undefined) {
 
                 if (msg.loop.units != undefined) {
-                    if ((msg.loop.units === "Millisecond") || (msg.loop.units === "Second") || (msg.loop.units === "Hour") || (msg.loop.units === "Day")) {
+                    if ((msg.loop.units === "Millisecond") || (msg.loop.units === "Second") || (msg.loop.units === "Minute") || (msg.loop.units === "Hour") || (msg.loop.units === "Day")) {
                         node.units = msg.loop.units;
                     } else {
-                        node.status({ fill: "red", shape: "ring", text: "Invalid attribbute msg.loop.units" });
-                        node.error('Invalid Attribbute: msg.loop.units, allowed values are Millisecond, Second, Minute, Hour, and Day');
+                        node.status({ fill: "red", shape: "ring", text: "Invalid Attribute msg.loop.units" });
+                        node.error('Invalid Attribute: msg.loop.units, allowed values are Millisecond, Second, Minute, Hour, and Day');
                         return;
                     }
                 }
@@ -59,17 +65,17 @@ module.exports = function (RED) {
                         node.duration = msg.loop.duration;
                     } else {
                         node.status({ fill: "red", shape: "ring", text: "msg.loop.units must be an Integer" });
-                        node.error('Invalid Attribbute: msg.loop.duration, value must be an Integer');
+                        node.error('Invalid Attribute: msg.loop.duration, value must be an Integer');
                         return;
                     }
                 }
 
                 if (msg.loop.maxtimeoutunits != undefined) {
-                    if ((msg.loop.maxtimeoutunits === "Millisecond") || (msg.loop.maxtimeoutunits === "Second") || (msg.loop.maxtimeoutunits === "Hour") || (msg.loop.maxtimeoutunits === "Day")) {
+                    if ((msg.loop.maxtimeoutunits === "Millisecond") || (msg.loop.maxtimeoutunits === "Second") || (msg.loop.maxtimeoutunits === "Minute") || (msg.loop.maxtimeoutunits === "Hour") || (msg.loop.maxtimeoutunits === "Day")) {
                         node.maxtimeoutunits = msg.loop.maxtimeoutunits;
                     } else {
-                        node.status({ fill: "red", shape: "ring", text: "Invalid attribbute msg.loop.maxtimeoutunits" });
-                        node.error('Invalid Attribbute: msg.loop.maxtimeoutunits, allowed values are Millisecond, Second, Minute, Hour, and Day');
+                        node.status({ fill: "red", shape: "ring", text: "Invalid Attribute msg.loop.maxtimeoutunits" });
+                        node.error('Invalid Attribute: msg.loop.maxtimeoutunits, allowed values are Millisecond, Second, Minute, Hour, and Day');
                         return;
                     }
                 }
@@ -80,7 +86,7 @@ module.exports = function (RED) {
                         node.maxtimeout = msg.loop.maxtimeout;
                     } else {
                         node.status({ fill: "red", shape: "ring", text: "msg.loop.maxtimeout must be an Integer" });
-                        node.error('Invalid Attribbute: msg.loop.maxtimeout, value must be an Integer');
+                        node.error('Invalid Attribute: msg.loop.maxtimeout, value must be an Integer');
                         return;
                     }
                 }
@@ -89,7 +95,7 @@ module.exports = function (RED) {
                         node.maxloops = msg.loop.maxloops;
                     } else {
                         node.status({ fill: "red", shape: "ring", text: "msg.loop.maxloops must be an Integer" });
-                        node.error('Invalid Attribbute: msg.loop.maxloops, value must be an Integer');
+                        node.error('Invalid Attribute: msg.loop.maxloops, value must be an Integer');
                         return;
                     }
                 }
@@ -108,7 +114,7 @@ module.exports = function (RED) {
                 stopped = false;
                 clearTimeout(timeout);
                 timeout = null;
-                if (msg.payload == "stop" || msg.payload == "STOP") {
+                if (msg.payload.toLowerCase() === "stop") {
                     node.status({
                         fill: "red",
                         shape: "ring",
