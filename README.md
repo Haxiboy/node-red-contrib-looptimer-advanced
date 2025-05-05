@@ -49,7 +49,7 @@ You can define maximum number of loops with `msg.loop.maxloops`
   
 
 Setting the Max Loops and Max Timeout settings to high values can, for all intents, ensure that the loop can only be stopped by an incoming `stop` payload, however, the stability of the loop has not been tested over an extended number of hours.
-
+**0.0.11** - Add Type Check for Stop condition to avoid type error on non string payload converting to LowerCase  
 **0.0.10** - Update README.md  
 **0.0.9** - Bugfix for Minutes, and minor improvements to code quality  
 **0.0.8** - Fix Until Node-Red Does Not Get Fixed on issue #3867  

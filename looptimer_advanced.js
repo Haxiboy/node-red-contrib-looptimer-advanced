@@ -114,7 +114,7 @@ module.exports = function (RED) {
                 stopped = false;
                 clearTimeout(timeout);
                 timeout = null;
-                if (msg.payload.toLowerCase() === "stop") {
+                if (typeof msg.payload === "string" && msg.payload.toLowerCase() === "stop") {
                     node.status({
                         fill: "red",
                         shape: "ring",
