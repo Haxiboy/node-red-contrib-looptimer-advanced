@@ -10,8 +10,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node: [18, 20, 22, 24]
+        # The dev tooling (Node-RED 5, mocha) needs a recent Node.js, so older Node.js versions
+        # are tested against the Node-RED / mocha versions that still support them.
+        include:
+          - { node: 18, nodered: "3", mocha: "10" }
+          - { node: 20, nodered: "4", mocha: "10" }
+          - { node: 22 }
+          - { node: 24 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +26,9 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - name: Use Node-RED ${{ matrix.nodered }} and mocha ${{ matrix.mocha }}
+        if: matrix.nodered
+        run: npm install --no-save node-red@${{ matrix.nodered }} mocha@${{ matrix.mocha }}
       - run: npm test
 
   publish:
