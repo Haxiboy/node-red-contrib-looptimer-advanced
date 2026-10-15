@@ -1,8 +1,8 @@
 # Changelog
 
-This project adheres to [Semantic Versioning](https://semver.org/) from 0.1.0 on.
+This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
 
-## [0.1.0]
+## [1.0.0]
 
 ### Added
 - Pause / resume via payload (opt-in per node) or `msg.loop.command`; `paused` / `resumed` on output 2 and `msg.pauseduration` after a resume (#7).

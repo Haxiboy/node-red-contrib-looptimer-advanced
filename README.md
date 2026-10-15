@@ -106,15 +106,15 @@ Tick **Max Loops counts the first message too** (or send `msg.loop.totalcount = 
 
 ## Versioning
 
-Since **0.1.0** the package follows [Semantic Versioning](https://semver.org/) and keeps a [changelog](CHANGELOG.md) in the [Keep a Changelog](https://keepachangelog.com/) format.
+Since **1.0.0** the package follows [Semantic Versioning](https://semver.org/) and keeps a [changelog](CHANGELOG.md) in the [Keep a Changelog](https://keepachangelog.com/) format.
 
 | Bump | Meaning |
 |---|---|
-| **patch** `0.1.x` | Bug fixes only |
-| **minor** `0.x.0` | New, backwards compatible features |
-| **major** | Breaking changes, always called out in the changelog |
+| **patch** `1.0.x` | Bug fixes only |
+| **minor** `1.x.0` | New, backwards compatible features |
+| **major** `x.0.0` | Breaking changes (including raising the minimum Node-RED / Node.js version), always called out in the changelog |
 
-Releases are tagged `vX.Y.Z` on GitHub. The old `0.0.x` numbering was one increment per change and carried no compatibility promise.
+Releases are tagged `vX.Y.Z` on GitHub. The old `0.0.x` numbering was one increment per change and carried no compatibility promise. `1.0.0` marks the first release with a stable, tested public interface: the node's properties, `msg.loop` and the output payloads.
 
 ## Upgrading from 0.0.x
 

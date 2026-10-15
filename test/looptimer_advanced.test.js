@@ -161,7 +161,7 @@ describe("looptimer-advanced", function () {
             got.out.length.should.equal(count);
         });
     });
-    describe("pause / resume (new in 0.1.0)", function () {
+    describe("pause / resume (new in 1.0.0)", function () {
         it("freezes the loop and continues with the counters kept", function () {
             return setup({ duration: "100", units: "Millisecond", maxloops: "3", pausecontrol: true }, async (n1, got) => {
                 n1.receive({ payload: "go" });
@@ -227,7 +227,7 @@ describe("looptimer-advanced", function () {
         });
     });
 
-    describe("totalcount mode (new in 0.1.0)", function () {
+    describe("totalcount mode (new in 1.0.0)", function () {
         it("maxloops: 1 gives exactly one message", function () {
             return setup({ duration: "30", units: "Millisecond", maxloops: "1", totalcount: true }, async (n1, got) => {
                 n1.receive({ payload: "go" });
