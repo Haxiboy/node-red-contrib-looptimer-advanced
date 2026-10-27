@@ -2,6 +2,23 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
 
+## [1.1.0]
+
+All new settings are off by default (or default to the old behavior), existing flows keep working unchanged.
+
+### Added
+- **Send the first message immediately** setting and `msg.loop.sendfirst`. Without it the first message goes out after the first interval (the option announced in #4).
+- **msg.loopstate** with `state`, `count`, `sent`, `max`, `remaining`, `elapsed` and `interval` on every message, switched on with *Add the loop counters* or `msg.loop.loopstate`.
+- **status** command (payload, when payload commands are on, or `msg.loop.command`) that reports the state of the loop on output 2.
+- **New message** setting: `restarts the loop` (as before), `is ignored while a loop runs`, or `starts a separate loop per msg.topic`. In the per-topic mode `msg.loop.all = true` applies a command to all loops, and the node status shows the number of loops.
+- **Pause timeout** with `resume` or `stop` after it (`msg.loop.pausetimeout`, `pausetimeoutunits`, `pauseaction`), the open question of #7. Output 2 then has `msg.reason = "pause timeout"`.
+- **Typed settings**: *Loop Every*, *Max Loops* and *Max Timeout* can be read from `msg.`, `flow.`, `global.` or `env`.
+- Tests for all of the above.
+
+### Changed
+- The ticks are due at fixed times after the start instead of one interval after the previous tick, so a long loop does not drift. The schedule is kept across a pause, and a loop that was stalled for more than an interval carries on from now instead of sending a burst.
+- Payload `status` is a command when payload commands are on (the setting is now called *Pause / resume / status with payload*). Existing nodes have it off.
+
 ## [1.0.0]
 
 ### Added

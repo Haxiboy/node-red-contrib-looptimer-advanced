@@ -1,35 +1,75 @@
 <script type="text/javascript">
-	RED.nodes.registerType('looptimer-advanced', {
-		category: 'function',
-		color: "#33B2FF",
-		defaults: {
-			duration: { value: "5", required: true, validate: RED.validators.number() },
-			units: { value: "Second" },
-			maxloops: { value: "100", required: false, validate: RED.validators.number() },
-			maxtimeout: { value: "1", required: false, validate: RED.validators.number() },
-			maxtimeoutunits: { value: "Hour" },
-			totalcount: { value: false },
-			pausecontrol: { value: true },
-			name: { value: "" }
-		},
-		inputs: 1,
-		outputs: 2,
-		icon: "looptimer_advanced.png",
-		label: function () {
-			return this.name || this.duration + " " + this.units + " Loop";
-		},
-		labelStyle: function () {
-			return this.name ? "node_label_italic" : "";
-		},
-		outputLabels: ["original msg", "stopped msg"]
-	});
+	(function () {
+		// Settings can be a number, or a msg., flow., global. or env. value
+		function typedNumber(typeField) {
+			return function (value) {
+				if ((this[typeField] || 'num') !== 'num') { return !!value; }
+				return RED.validators.number()(value);
+			};
+		}
+		const numericTypes = ['num', 'msg', 'flow', 'global', 'env'];
+
+		RED.nodes.registerType('looptimer-advanced', {
+			category: 'function',
+			color: "#33B2FF",
+			defaults: {
+				duration: { value: "5", required: true, validate: typedNumber('durationType') },
+				durationType: { value: "num" },
+				units: { value: "Second" },
+				maxloops: { value: "100", required: false, validate: typedNumber('maxloopsType') },
+				maxloopsType: { value: "num" },
+				totalcount: { value: false },
+				sendfirst: { value: true },
+				maxtimeout: { value: "1", required: false, validate: typedNumber('maxtimeoutType') },
+				maxtimeoutType: { value: "num" },
+				maxtimeoutunits: { value: "Hour" },
+				concurrency: { value: "restart" },
+				pausecontrol: { value: true },
+				pausetimeout: { value: "", required: false, validate: function (v) { return v === undefined || v === "" || RED.validators.number()(v); } },
+				pausetimeoutunits: { value: "Minute" },
+				pauseaction: { value: "resume" },
+				addstate: { value: false },
+				name: { value: "" }
+			},
+			inputs: 1,
+			outputs: 2,
+			icon: "looptimer_advanced.png",
+			label: function () {
+				return this.name || this.duration + " " + this.units + " Loop";
+			},
+			labelStyle: function () {
+				return this.name ? "node_label_italic" : "";
+			},
+			outputLabels: ["original msg", "stopped msg"],
+			oneditprepare: function () {
+				// Nodes saved by earlier versions do not have the newer settings, show the defaults
+				const defaults = { durationType: 'num', maxloopsType: 'num', maxtimeoutType: 'num', concurrency: 'restart', pausetimeoutunits: 'Minute', pauseaction: 'resume' };
+				Object.keys(defaults).forEach((key) => {
+					if (!this[key]) { $('#node-input-' + key).val(defaults[key]); }
+				});
+				if (this.sendfirst === undefined) { $('#node-input-sendfirst').prop('checked', true); }
+
+				['duration', 'maxloops', 'maxtimeout'].forEach((field) => {
+					$('#node-input-' + field).typedInput({
+						default: 'num',
+						types: numericTypes,
+						typeField: '#node-input-' + field + 'Type'
+					});
+				});
+				$('#node-input-duration').typedInput('width', '150px');
+				$('#node-input-maxloops').typedInput('width', '150px');
+				$('#node-input-maxtimeout').typedInput('width', '150px');
+			}
+		});
+	})();
 </script>
 
 <script type="text/html" data-template-name="looptimer-advanced">
 	<div class="form-row">
 		<label for="node-input-duration"><i class="fa fa-clock-o"></i> Loop Every</label>
-		<input type="text" id="node-input-duration" style="text-align:end; width:70px !important">
-		<select id="node-input-units" style="width:140px !important">
+		<input type="text" id="node-input-duration">
+		<input type="hidden" id="node-input-durationType">
+		<select id="node-input-units" style="width:120px !important">
 			<option value="Millisecond">Milliseconds</option>
 			<option value="Second">Seconds</option>
 			<option value="Minute">Minutes</option>
@@ -39,7 +79,8 @@
 	</div>
 	<div class="form-row">
 		<label for="node-input-maxloops"><i class="fa fa-repeat"></i> Max Loops</label>
-		<input type="text" id="node-input-maxloops" style="text-align:end; width:70px !important">
+		<input type="text" id="node-input-maxloops">
+		<input type="hidden" id="node-input-maxloopsType">
 	</div>
 	<div class="form-row">
 		<label>&nbsp;</label>
@@ -47,9 +88,15 @@
 		<label for="node-input-totalcount" style="width:auto"> Max Loops counts the first message too</label>
 	</div>
 	<div class="form-row">
+		<label>&nbsp;</label>
+		<input type="checkbox" id="node-input-sendfirst" style="display:inline-block; width:auto; vertical-align:top;">
+		<label for="node-input-sendfirst" style="width:auto"> Send the first message immediately</label>
+	</div>
+	<div class="form-row">
 		<label for="node-input-maxtimeout"><i class="fa fa-clock-o"></i> Max Timeout</label>
-		<input type="text" id="node-input-maxtimeout" style="text-align:end; width:70px !important">
-		<select id="node-input-maxtimeoutunits" style="width:140px !important">
+		<input type="text" id="node-input-maxtimeout">
+		<input type="hidden" id="node-input-maxtimeoutType">
+		<select id="node-input-maxtimeoutunits" style="width:120px !important">
 			<option value="Millisecond">Milliseconds</option>
 			<option value="Second">Seconds</option>
 			<option value="Minute">Minutes</option>
@@ -58,9 +105,40 @@
 		</select>
 	</div>
 	<div class="form-row">
+		<label for="node-input-concurrency"><i class="fa fa-random"></i> New message</label>
+		<select id="node-input-concurrency" style="width:270px !important">
+			<option value="restart">restarts the loop</option>
+			<option value="ignore">is ignored while a loop runs</option>
+			<option value="pertopic">starts a separate loop per msg.topic</option>
+		</select>
+	</div>
+	<div class="form-row">
 		<label>&nbsp;</label>
 		<input type="checkbox" id="node-input-pausecontrol" style="display:inline-block; width:auto; vertical-align:top;">
-		<label for="node-input-pausecontrol" style="width:auto"> Pause / resume with payload</label>
+		<label for="node-input-pausecontrol" style="width:auto"> Pause / resume / status with payload</label>
+	</div>
+	<div class="form-row">
+		<label for="node-input-pausetimeout"><i class="fa fa-pause"></i> Pause Timeout</label>
+		<input type="text" id="node-input-pausetimeout" placeholder="none" style="text-align:end; width:70px !important">
+		<select id="node-input-pausetimeoutunits" style="width:120px !important">
+			<option value="Millisecond">Milliseconds</option>
+			<option value="Second">Seconds</option>
+			<option value="Minute">Minutes</option>
+			<option value="Hour">Hours</option>
+			<option value="Day">Days</option>
+		</select>
+	</div>
+	<div class="form-row">
+		<label for="node-input-pauseaction"><i class="fa fa-step-forward"></i> After Timeout</label>
+		<select id="node-input-pauseaction" style="width:140px !important">
+			<option value="resume">resume the loop</option>
+			<option value="stop">stop the loop</option>
+		</select>
+	</div>
+	<div class="form-row">
+		<label>&nbsp;</label>
+		<input type="checkbox" id="node-input-addstate" style="display:inline-block; width:auto; vertical-align:top;">
+		<label for="node-input-addstate" style="width:auto"> Add the loop counters as msg.loopstate</label>
 	</div>
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -74,27 +152,36 @@
 	<h3>Inputs</h3>
 	<dl class="message-properties">
 		<dt>payload <span class="property-type">string</span></dt>
-		<dd><code>stop</code> / <code>STOP</code> stops the loop. If enabled in the node, <code>pause</code> and <code>resume</code> do what they say. Any other message (re)starts the loop.</dd>
+		<dd><code>stop</code> / <code>STOP</code> stops the loop. If enabled in the node, <code>pause</code>, <code>resume</code> and <code>status</code> do what they say. Any other message (re)starts the loop.</dd>
 		<dt class="optional">loop.command <span class="property-type">string</span></dt>
-		<dd><code>stop</code>, <code>pause</code> or <code>resume</code>. Works regardless of the payload and of the "Pause / resume with payload" setting.</dd>
+		<dd><code>stop</code>, <code>pause</code>, <code>resume</code> or <code>status</code>. Works regardless of the payload and of the "Pause / resume / status with payload" setting.</dd>
+		<dt class="optional">loop.all <span class="property-type">boolean</span></dt>
+		<dd>With <code>true</code> a command applies to all loops of the node (see "New message" below).</dd>
 		<dt class="optional">loop.duration, loop.units <span class="property-type">number, string</span></dt>
 		<dd>Override the loop interval. Units: <code>Millisecond</code>, <code>Second</code>, <code>Minute</code>, <code>Hour</code>, <code>Day</code>.</dd>
 		<dt class="optional">loop.maxtimeout, loop.maxtimeoutunits <span class="property-type">number, string</span></dt>
 		<dd>Override the maximum timeout.</dd>
 		<dt class="optional">loop.maxloops <span class="property-type">number</span></dt>
 		<dd>Override the maximum number of loops.</dd>
-		<dt class="optional">loop.totalcount <span class="property-type">boolean</span></dt>
-		<dd>Override whether Max Loops counts the first message too.</dd>
+		<dt class="optional">loop.totalcount, loop.sendfirst, loop.loopstate <span class="property-type">boolean</span></dt>
+		<dd>Override "Max Loops counts the first message too", "Send the first message immediately" and "Add the loop counters".</dd>
+		<dt class="optional">loop.pausetimeout, loop.pausetimeoutunits, loop.pauseaction <span class="property-type">number, string, string</span></dt>
+		<dd>Override the pause timeout and what happens after it (<code>resume</code> or <code>stop</code>).</dd>
 	</dl>
 
 	<h3>Outputs</h3>
 	<ol class="node-ports">
-		<li>The original message, then once per loop. After a pause, the first message carries <code>msg.pauseduration</code> (milliseconds spent paused).</li>
-		<li>Status messages with payload <code>stopped</code>, <code>max loops reached</code>, <code>timeout</code>, <code>paused</code> or <code>resumed</code>.</li>
+		<li>The original message, then once per loop. After a pause, the first message carries <code>msg.pauseduration</code> (milliseconds spent paused). With "Add the loop counters" every message carries <code>msg.loopstate</code>.</li>
+		<li>Status messages with payload <code>stopped</code>, <code>max loops reached</code>, <code>timeout</code>, <code>paused</code>, <code>resumed</code> or <code>status</code>. After an automatic resume or stop <code>msg.reason</code> is <code>pause timeout</code>.</li>
 	</ol>
 
+	<h3>msg.loopstate</h3>
+	<p><code>state</code> (<code>running</code>, <code>paused</code>, <code>stopped</code>, <code>finished</code> or <code>idle</code>), <code>count</code> (loop messages sent, the first one not included), <code>sent</code> (all messages), <code>max</code> and <code>remaining</code> (<code>null</code> when unlimited), <code>elapsed</code> (milliseconds the loop has been running, the time paused not included) and <code>interval</code> (milliseconds).</p>
+
 	<h3>Details</h3>
-	<p>By default the first message is not part of the loop, so Max Loops <code>5</code> gives <code>6</code> messages. Tick "Max Loops counts the first message too" to get exactly the configured number of messages: <code>1</code> is a single message, <code>0</code> sends nothing and <code>-1</code> is unlimited.</p>
-	<p>Pausing freezes the remaining time of the current interval, the loop counter and the timeout budget; resuming continues from there.</p>
+	<p><b>Counting.</b> By default the first message is not part of the loop, so Max Loops <code>5</code> gives <code>6</code> messages. Tick "Max Loops counts the first message too" to get exactly the configured number: <code>1</code> is a single message, <code>0</code> sends nothing and <code>-1</code> is unlimited. Without "Send the first message immediately" the first message goes out after the first interval, so Max Loops <code>5</code> gives <code>5</code> messages.</p>
+	<p><b>New message.</b> By default a new message restarts the loop. "is ignored while a loop runs" drops it (also its settings) until the loop is over. "starts a separate loop per msg.topic" runs one loop per topic, <code>stop</code>, <code>pause</code>, <code>resume</code> and <code>status</code> then apply to the loop of the topic of the command, or to all loops with <code>msg.loop.all = true</code>.</p>
+	<p><b>Pause.</b> Pausing freezes the remaining time of the current interval, the loop counter and the timeout budget. With a pause timeout the loop is resumed or stopped automatically after that time.</p>
+	<p><b>Typed settings.</b> Loop Every, Max Loops and Max Timeout can be read from <code>msg.</code>, <code>flow.</code>, <code>global.</code> or <code>env</code> instead of being a fixed number.</p>
 	<p>Overrides in <code>msg.loop</code> stay in effect for the following messages.</p>
 </script>

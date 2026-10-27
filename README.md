@@ -19,7 +19,12 @@
 - 🔁 **Repeat a message** once per interval (milliseconds to days) with an optional maximum loop count and maximum run time.
 - 🛑 **Stop** with a payload, **⏸ pause and ▶ resume** without losing the loop counter or the timeout budget.
 - 🧩 **Reconfigure per message** with `msg.loop`: interval, limits and commands, no redeploy needed.
-- 🎯 **Exact counts**: optionally make *Max Loops* mean the total number of messages, including a single call.
+- 🎯 **Exact counts**: optionally make *Max Loops* mean the total number of messages, including a single call, and optionally skip the immediate first message.
+- 📊 **Loop counters**: `msg.loopstate` with the count, the remaining loops and the elapsed time, and a `status` command to ask for them.
+- 🧵 **One loop per topic**: run a separate loop for every `msg.topic` in one node, or ignore new messages while a loop runs.
+- ⏲️ **Pause timeout**: resume or stop automatically when a pause lasts too long.
+- 🔌 **Typed settings**: read the interval and the limits from `msg.`, `flow.`, `global.` or `env`.
+- 🎯 **No drift**: every tick is due at a fixed time after the start, also after a pause.
 - 🧪 **Tested and dependency free**: plain timers, an automated test suite and CI on Node.js 18 – 24.
 - 🔒 **Backwards compatible**: flows built with 0.0.x keep working unchanged, every new feature is opt-in.
 
@@ -57,19 +62,28 @@ stateDiagram-v2
 
 | Output | Sends |
 |---|---|
-| **1** | The original message immediately, then one copy per loop. The first copy after a resume carries `msg.pauseduration` (ms). |
-| **2** | Status messages with these payloads: `stopped`, `max loops reached`, `timeout`, `paused`, `resumed`. |
+| **1** | The original message immediately (unless switched off), then one copy per loop. The first copy after a resume carries `msg.pauseduration` (ms). With *Add the loop counters* every copy carries `msg.loopstate`. |
+| **2** | Status messages with these payloads: `stopped`, `max loops reached`, `timeout`, `paused`, `resumed`, `status`. After an automatic resume or stop `msg.reason` is `pause timeout`. |
 
 ## Controlling the loop
 
 | How | What it does |
 |---|---|
 | `msg.payload = "stop"` (or `"STOP"`) | Stops the loop |
-| `msg.payload = "pause"` / `"resume"` | Pauses / resumes (enable *Pause / resume with payload* in the node) |
-| `msg.loop.command = "stop"`, `"pause"` or `"resume"` | Same, but always available and independent of the payload |
-| Any other message | Starts the loop, or restarts it. Two loops never run in parallel in one node |
+| `msg.payload = "pause"` / `"resume"` / `"status"` | Pauses / resumes / reports the state (enable *Pause / resume / status with payload* in the node) |
+| `msg.loop.command = "stop"`, `"pause"`, `"resume"` or `"status"` | Same, but always available and independent of the payload |
+| `msg.loop.all = true` | With a command: applies to all loops of the node (see [one loop per topic](#new-messages-while-a-loop-runs)) |
+| Any other message | Starts the loop, or restarts it (see [New messages while a loop runs](#new-messages-while-a-loop-runs)) |
 
 Pausing freezes the remaining time of the current interval, the loop counter and the timeout budget. Resuming continues from exactly there. Stopping while paused works too.
+
+### Pause timeout
+
+Set *Pause Timeout* (and *After Timeout*: resume or stop the loop) to get the loop going again, or end it, when a pause lasts too long. Output 2 then sends `resumed` / `stopped` with `msg.reason = "pause timeout"`. Resuming or stopping by hand cancels the timeout.
+
+### Status command
+
+A `status` command sends a message with payload `status` and [`msg.loopstate`](#loop-counters-msgloopstate) on output 2, for example to show the progress on a dashboard. When no loop is running `msg.loopstate.state` is `idle`.
 
 ## Overriding settings with `msg.loop`
 
@@ -81,7 +95,12 @@ Pausing freezes the remaining time of the current interval, the loop counter and
 | `msg.loop.totalcount` | boolean | *Max Loops* counts the first message too |
 | `msg.loop.maxtimeout` | number | Maximum run time of the loop |
 | `msg.loop.maxtimeoutunits` | string | Same units as above |
-| `msg.loop.command` | string | `stop`, `pause` or `resume` |
+| `msg.loop.sendfirst` | boolean | Send the first message immediately |
+| `msg.loop.loopstate` | boolean | Add `msg.loopstate` to the messages |
+| `msg.loop.pausetimeout` | number | Pause timeout (with `msg.loop.pausetimeoutunits`) |
+| `msg.loop.pauseaction` | string | `resume` or `stop`, what happens after the pause timeout |
+| `msg.loop.command` | string | `stop`, `pause`, `resume` or `status` |
+| `msg.loop.all` | boolean | Apply a command to all loops |
 
 ```js
 // Function node: loop every 30 seconds, at most 10 times
@@ -104,6 +123,35 @@ Tick **Max Loops counts the first message too** (or send `msg.loop.totalcount = 
 | `1` | 2 messages | **1 message** (a single call) |
 | `5` | 6 messages | **5 messages** |
 
+Without **Send the first message immediately** (or `msg.loop.sendfirst = false`) nothing goes out at the start, the first message follows after the first interval. *Max Loops* `5` then gives **5** messages, and with *counts the first message too* it is the same number.
+
+## Loop counters (`msg.loopstate`)
+
+Tick **Add the loop counters as msg.loopstate** (or send `msg.loop.loopstate = true`) and every message carries:
+
+| Property | Meaning |
+|---|---|
+| `state` | `running`, `paused`, `stopped`, `finished` or `idle` |
+| `count` | Loop messages sent, the first message not included |
+| `sent` | All messages sent |
+| `max`, `remaining` | Limit and loops left, `null` when unlimited |
+| `elapsed` | Milliseconds the loop has been running, the time paused not included |
+| `interval` | Loop interval in milliseconds |
+
+## New messages while a loop runs
+
+The setting **New message** decides what a message does that arrives while a loop is running:
+
+| Setting | Behavior |
+|---|---|
+| **restarts the loop** (default) | The loop starts again from the beginning, as it always did |
+| **is ignored while a loop runs** | The message and its `msg.loop` settings are dropped until the loop is over. `stop`, `pause`, `resume` and `status` still work |
+| **starts a separate loop per msg.topic** | Every topic has its own loop, a new message restarts only the loop of its topic. Commands apply to the loop of the topic of the command message, or to all loops with `msg.loop.all = true`. The node status shows the number of loops |
+
+## Typed settings
+
+*Loop Every*, *Max Loops* and *Max Timeout* are typed inputs: next to a fixed number they can be read from `msg.`, `flow.`, `global.` or an environment variable (`env`). The value is read for every message that starts a loop, and has to be a number, otherwise the node reports an error and does not start. Overrides in `msg.loop` are applied on top.
+
 ## Versioning
 
 Since **1.0.0** the package follows [Semantic Versioning](https://semver.org/) and keeps a [changelog](CHANGELOG.md) in the [Keep a Changelog](https://keepachangelog.com/) format.
@@ -116,6 +164,10 @@ Since **1.0.0** the package follows [Semantic Versioning](https://semver.org/) a
 
 Releases are tagged `vX.Y.Z` on GitHub. The old `0.0.x` numbering was one increment per change and carried no compatibility promise. `1.0.0` marks the first release with a stable, tested public interface: the node's properties, `msg.loop` and the output payloads.
 
+## Upgrading
+
+**From 1.0.x to 1.1:** nothing to change, every new setting is off by default and existing nodes keep their behavior. The only visible difference is that the ticks no longer drift: a long loop now sends its messages at fixed times after the start instead of a little later every time.
+
 ## Upgrading from 0.0.x
 
 Nothing to change in your flows. What is different:
@@ -124,7 +176,7 @@ Nothing to change in your flows. What is different:
 - A loop that hits its maximum timeout now always reports `timeout` on output 2 (before it sometimes ended silently). The old single-call workaround (`maxloops: 0` with a tiny `maxtimeout`) still works.
 - Invalid `msg.loop` values are reported through normal error handling, so a **Catch** node sees them.
 - Minimum versions: Node-RED 3.0 and Node.js 18.
-- A payload of `pause` or `resume` is only treated as a command when the option is ticked. Existing nodes have it **off**, so such payloads loop like any other value.
+- A payload of `pause`, `resume` or `status` is only treated as a command when the option is ticked. Existing nodes have it **off**, so such payloads loop like any other value.
 
 ## Contributing
 
@@ -139,4 +191,4 @@ npm test
 
 ## Credits and license
 
-Based on **node-red-contrib-looptimer** and **node-red-contrib-looptimer2**, with the addition of per-message overrides, pause/resume and exact counting. Released under the [Apache-2.0 license](LICENSE).
+Based on **node-red-contrib-looptimer** and **node-red-contrib-looptimer2**, with the addition of per-message overrides, pause/resume, loop counters, one loop per topic, typed settings and exact counting. Released under the [Apache-2.0 license](LICENSE).

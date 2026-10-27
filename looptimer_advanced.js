@@ -10,6 +10,9 @@ module.exports = function (RED) {
     };
     const UNIT_LIST = Object.keys(UNIT_MS).join(", ");
 
+    // Settings that can be a msg., flow., global. or env. value instead of a number (typed inputs).
+    const TYPED_FIELDS = ["duration", "maxloops", "maxtimeout"];
+
     function toMs(unit, amount) {
         if (!Object.prototype.hasOwnProperty.call(UNIT_MS, unit)) {
             throw new Error(`Invalid unit: ${unit}`);
@@ -25,77 +28,134 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         const node = this;
 
+        // Which settings are not plain numbers, the value then is the name of the msg/flow/global/env property.
+        const types = {};
+        TYPED_FIELDS.forEach((field) => { types[field] = config[field + "Type"] || "num"; });
+        const hasTyped = TYPED_FIELDS.some((field) => types[field] !== "num");
+
         node.units = config.units || "Second";
-        node.duration = config.duration || 5;
-        node.maxloops = config.maxloops || 100;
+        node.duration = types.duration === "num" ? (config.duration || 5) : 5;
+        node.maxloops = types.maxloops === "num" ? (config.maxloops || 100) : 100;
         node.maxtimeoutunits = config.maxtimeoutunits || "Hour";
-        node.maxtimeout = config.maxtimeout || 1;
-        // Opt-in features. Flows saved by 0.0.x do not carry these properties, so they keep the old behaviour.
+        node.maxtimeout = types.maxtimeout === "num" ? (config.maxtimeout || 1) : 1;
+
+        // Opt-in features. Flows saved by 0.0.x / 1.0.x do not carry these properties, so they keep the old behaviour.
         node.totalcount = config.totalcount === true || config.totalcount === "true";
         node.pausecontrol = config.pausecontrol === true || config.pausecontrol === "true";
+        node.sendfirst = !(config.sendfirst === false || config.sendfirst === "false");
+        node.addstate = config.addstate === true || config.addstate === "true";
+        node.concurrency = config.concurrency === "ignore" || config.concurrency === "pertopic" ? config.concurrency : "restart";
+        node.pausetimeout = Number(config.pausetimeout) > 0 ? Number(config.pausetimeout) : 0;
+        node.pausetimeoutunits = Object.prototype.hasOwnProperty.call(UNIT_MS, config.pausetimeoutunits) ? config.pausetimeoutunits : "Minute";
+        node.pauseaction = config.pauseaction === "stop" ? "stop" : "resume";
 
         if (node.duration <= 0) { node.duration = 0; }
         if (node.maxtimeout <= 0) { node.maxtimeout = 0; }
 
-        // Runtime state of the running loop (null when idle).
-        let run = null;
+        // Runtime state of the running loops: one per node, or one per msg.topic in "pertopic" mode.
+        const runs = new Map();
 
-        function clearTimer() {
-            if (run && run.timer) {
-                clearTimeout(run.timer);
-                run.timer = null;
+        function keyOf(msg) {
+            return node.concurrency === "pertopic" ? String(msg.topic) : "";
+        }
+
+        // In "pertopic" mode the status shows all loops, not the last event.
+        function setStatus(fill, shape, text) {
+            if (node.concurrency === "pertopic" && runs.size > 0) {
+                let paused = 0;
+                runs.forEach((r) => { if (r.paused) { paused++; } });
+                const running = runs.size - paused;
+                node.status({
+                    fill: running > 0 ? "green" : "yellow",
+                    shape: "dot",
+                    text: paused > 0 ? `${running} running, ${paused} paused` : `${running} running`
+                });
+            } else {
+                node.status({ fill: fill, shape: shape, text: text });
             }
         }
 
-        function endLoop() {
-            clearTimer();
-            run = null;
+        function clearTimers(run) {
+            if (run.timer) { clearTimeout(run.timer); run.timer = null; }
+            if (run.pauseTimer) { clearTimeout(run.pauseTimer); run.pauseTimer = null; }
         }
 
-        function sendControl(msg, payload) {
-            const m = RED.util.cloneMessage(msg);
+        function endLoop(run) {
+            clearTimers(run);
+            if (runs.get(run.key) === run) { runs.delete(run.key); }
+        }
+
+        // Counters of a loop, sent in msg.loopstate
+        function stateOf(run, state) {
+            const now = run.paused ? run.pausedAt : Date.now();
+            return {
+                state: state || (run.paused ? "paused" : "running"),
+                count: run.count,
+                sent: run.sent,
+                max: run.limit > 0 ? run.limit : null,
+                remaining: run.limit > 0 ? Math.max(0, run.limit - run.count) : null,
+                elapsed: now - run.t0,
+                interval: run.duration
+            };
+        }
+
+        // Copy of the message of the loop, with the loop counters when they are switched on
+        function copyOf(run, state) {
+            const m = RED.util.cloneMessage(run.msg);
+            if (run.addstate) { m.loopstate = stateOf(run, state); }
+            return m;
+        }
+
+        // Status message for the second output. Based on the message of the loop, or on the incoming one when there is no loop.
+        function controlMsg(base, payload, run, state, reason) {
+            const m = RED.util.cloneMessage(base);
             m.payload = payload;
-            node.send([null, m]);
+            if (run && run.addstate) { m.loopstate = stateOf(run, state); }
+            if (reason) { m.reason = reason; }
+            return m;
+        }
+
+        function sendControl(base, payload, run, state, reason) {
+            node.send([null, controlMsg(base, payload, run, state, reason)]);
         }
 
         // Arms the single timer: either the next loop tick or, when it comes first, the overall timeout.
-        function schedule() {
+        // Every tick is due at a fixed time after the start, so the loop does not drift.
+        function schedule(run) {
+            const tickDue = run.origin + (run.count + 1) * run.duration;
+            const deadline = run.t0 + run.maxtimeout;
+            const deadlineFirst = deadline < tickDue;
+            const due = deadlineFirst ? deadline : tickDue;
+            run.timer = setTimeout(deadlineFirst ? () => onDeadline(run) : () => onTick(run), Math.max(0, due - Date.now()));
+        }
+
+        function onDeadline(run) {
+            run.timer = null;
+            setStatus("red", "ring", "timeout reached");
+            sendControl(run.msg, "timeout", run, "finished");
+            endLoop(run);
+        }
+
+        function onTick(run) {
+            run.timer = null;
             const now = Date.now();
-            const untilTick = run.remainingTick !== null ? run.remainingTick : run.duration;
-            const untilDeadline = run.remainingDeadline !== null ? run.remainingDeadline : run.deadline - now;
-            run.remainingTick = null;
-            run.remainingDeadline = null;
-
-            const deadlineFirst = untilDeadline < untilTick;
-            const delay = Math.max(0, Math.min(untilTick, untilDeadline));
-            run.tickDue = now + (deadlineFirst ? untilTick : delay);
-            run.deadline = now + untilDeadline;
-            run.timer = setTimeout(deadlineFirst ? onDeadline : onTick, delay);
-        }
-
-        function onDeadline() {
-            run.timer = null;
-            node.status({ fill: "red", shape: "ring", text: "timeout reached" });
-            sendControl(run.msg, "timeout");
-            endLoop();
-        }
-
-        function onTick() {
-            run.timer = null;
+            const lateness = now - (run.origin + (run.count + 1) * run.duration);
             run.count++;
+            run.sent++;
             const count = run.count;
-            const cp = RED.util.cloneMessage(run.msg);
+            // After a long stall (e.g. a blocked event loop) the loop carries on from now instead of firing a burst
+            if (lateness > run.duration) { run.origin = now - count * run.duration; }
+
+            const cp = copyOf(run);
             if (run.pausedFor) {
                 cp.pauseduration = run.pausedFor;
                 run.pausedFor = 0;
             }
 
             if (run.limit > 0 && count >= run.limit) {
-                const ml = RED.util.cloneMessage(run.msg);
-                ml.payload = "max loops reached";
-                node.send([cp, ml]);
-                node.status({ fill: "red", shape: "ring", text: "max loops reached" });
-                endLoop();
+                node.send([cp, controlMsg(run.msg, "max loops reached", run, "finished")]);
+                setStatus("red", "ring", "max loops reached");
+                endLoop(run);
                 return;
             }
 
@@ -103,47 +163,61 @@ module.exports = function (RED) {
                 node.send([cp, null]);
                 if ((count + 1) * run.duration > run.maxtimeout) {
                     // Kept from 0.0.x: the last loop message is repeated together with the "timeout" message.
-                    const to = RED.util.cloneMessage(run.msg);
-                    to.payload = "timeout";
-                    node.send([cp, to]);
-                    node.status({ fill: "red", shape: "ring", text: "timeout reached" });
-                    endLoop();
+                    node.send([cp, controlMsg(run.msg, "timeout", run, "finished")]);
+                    setStatus("red", "ring", "timeout reached");
+                    endLoop(run);
                     return;
                 }
-                node.status({ fill: "green", shape: "dot", text: "running" });
-                schedule();
+                setStatus("green", "dot", "running");
+                schedule(run);
             } else {
-                node.status({ fill: "red", shape: "ring", text: "timeout reached" });
-                sendControl(run.msg, "timeout");
-                endLoop();
+                setStatus("red", "ring", "timeout reached");
+                sendControl(run.msg, "timeout", run, "finished");
+                endLoop(run);
             }
         }
 
-        function stop(msg) {
-            endLoop();
-            node.status({ fill: "red", shape: "ring", text: "stopped" });
-            sendControl(msg, "stopped");
+        function stop(msg, run, reason) {
+            let state = null;
+            if (run) {
+                state = stateOf(run, "stopped");
+                endLoop(run);
+            }
+            setStatus("red", "ring", "stopped");
+            const m = controlMsg(msg, "stopped", null, null, reason);
+            if (run && run.addstate) { m.loopstate = state; }
+            node.send([null, m]);
         }
 
-        function pause(msg) {
-            if (!run || run.paused) { return; }
-            const now = Date.now();
-            clearTimer();
+        function pause(run, msg) {
+            if (run.paused) { return; }
+            clearTimers(run);
             run.paused = true;
-            run.pausedAt = now;
-            run.remainingTick = Math.max(0, run.tickDue - now);
-            run.remainingDeadline = Math.max(0, run.deadline - now);
-            node.status({ fill: "yellow", shape: "ring", text: "paused" });
-            sendControl(msg, "paused");
+            run.pausedAt = Date.now();
+            setStatus("yellow", "ring", "paused");
+            sendControl(msg, "paused", run);
+            if (node.pausetimeout > 0) {
+                const wait = toMs(node.pausetimeoutunits, node.pausetimeout);
+                const action = node.pauseaction;
+                run.pauseTimer = setTimeout(() => {
+                    run.pauseTimer = null;
+                    if (action === "stop") { stop(run.msg, run, "pause timeout"); } else { resume(run, run.msg, "pause timeout"); }
+                }, wait);
+            }
         }
 
-        function resume(msg) {
-            if (!run || !run.paused) { return; }
+        function resume(run, msg, reason) {
+            if (!run.paused) { return; }
+            if (run.pauseTimer) { clearTimeout(run.pauseTimer); run.pauseTimer = null; }
+            // The time spent paused does not count: the ticks and the timeout continue where they were left
+            const spent = Date.now() - run.pausedAt;
+            run.origin += spent;
+            run.t0 += spent;
+            run.pausedFor += spent;
             run.paused = false;
-            run.pausedFor = (run.pausedFor || 0) + (Date.now() - run.pausedAt);
-            node.status({ fill: "green", shape: "dot", text: "running" });
-            sendControl(msg, "resumed");
-            schedule();
+            setStatus("green", "dot", "running");
+            sendControl(msg, "resumed", run, null, reason);
+            schedule(run);
         }
 
         // Validates and applies msg.loop overrides. Returns an error text, or null when everything is fine.
@@ -166,22 +240,42 @@ module.exports = function (RED) {
                 node[prop] = over[key];
                 return null;
             };
-            if (over.totalcount !== undefined) {
-                if (typeof over.totalcount !== "boolean") {
-                    node.status({ fill: "red", shape: "ring", text: "msg.loop.totalcount must be a boolean" });
-                    return "Invalid Attribute: msg.loop.totalcount, value must be a boolean";
+            const checkBoolean = (key, prop) => {
+                if (over[key] === undefined) { return null; }
+                if (typeof over[key] !== "boolean") {
+                    node.status({ fill: "red", shape: "ring", text: `msg.loop.${key} must be a boolean` });
+                    return `Invalid Attribute: msg.loop.${key}, value must be a boolean`;
                 }
-                node.totalcount = over.totalcount;
-            }
-            return checkUnit("units", "units") ||
+                node[prop] = over[key];
+                return null;
+            };
+            const checkAction = () => {
+                if (over.pauseaction === undefined) { return null; }
+                if (over.pauseaction !== "resume" && over.pauseaction !== "stop") {
+                    node.status({ fill: "red", shape: "ring", text: "Invalid Attribute msg.loop.pauseaction" });
+                    return "Invalid Attribute: msg.loop.pauseaction, allowed values are resume and stop";
+                }
+                node.pauseaction = over.pauseaction;
+                return null;
+            };
+            return checkBoolean("totalcount", "totalcount") ||
+                checkUnit("units", "units") ||
                 checkNumber("duration", "duration") ||
                 checkUnit("maxtimeoutunits", "maxtimeoutunits") ||
                 checkNumber("maxtimeout", "maxtimeout") ||
-                checkNumber("maxloops", "maxloops");
+                checkNumber("maxloops", "maxloops") ||
+                checkBoolean("sendfirst", "sendfirst") ||
+                checkBoolean("loopstate", "addstate") ||
+                checkNumber("pausetimeout", "pausetimeout") ||
+                checkUnit("pausetimeoutunits", "pausetimeoutunits") ||
+                checkAction();
         }
 
         function start(msg) {
-            endLoop();
+            const key = keyOf(msg);
+            const previous = runs.get(key);
+            if (previous) { endLoop(previous); }
+
             const duration = toMs(node.units, node.duration);
             const maxtimeout = toMs(node.maxtimeoutunits, node.maxtimeout);
             const maxloops = Number(node.maxloops);
@@ -190,45 +284,94 @@ module.exports = function (RED) {
             let limit = maxloops;
             if (node.totalcount) {
                 // totalcount: maxloops is the total number of messages, first one included; -1 = unlimited.
-                limit = maxloops < 0 ? 0 : maxloops - 1;
+                limit = maxloops < 0 ? 0 : (node.sendfirst ? maxloops - 1 : maxloops);
                 if (maxloops === 0) {
-                    node.status({ fill: "red", shape: "ring", text: "max loops reached" });
+                    setStatus("red", "ring", "max loops reached");
                     sendControl(msg, "max loops reached");
                     return;
                 }
-                if (maxloops === 1) {
+                if (maxloops === 1 && node.sendfirst) {
                     node.send([RED.util.cloneMessage(msg), null]);
-                    node.status({ fill: "red", shape: "ring", text: "max loops reached" });
+                    setStatus("red", "ring", "max loops reached");
                     sendControl(msg, "max loops reached");
                     return;
                 }
             }
 
-            node.send([RED.util.cloneMessage(msg), null]);
-            run = {
+            const now = Date.now();
+            const run = {
+                key: key,
                 msg: msg,
                 duration: duration,
                 maxtimeout: maxtimeout,
                 limit: limit,
+                addstate: node.addstate,
                 count: 0,
+                sent: 0,
                 timer: null,
+                pauseTimer: null,
                 paused: false,
                 pausedAt: 0,
                 pausedFor: 0,
-                tickDue: 0,
-                deadline: Date.now() + maxtimeout,
-                remainingTick: null,
-                remainingDeadline: null
+                origin: now, // the ticks are due at origin + n * duration
+                t0: now // start of the loop, without the time spent paused; the timeout is counted from here
             };
-            node.status({ fill: "green", shape: "dot", text: "running" });
-            schedule();
+            runs.set(key, run);
+            if (node.sendfirst) {
+                run.sent = 1;
+                node.send([copyOf(run), null]);
+            }
+            setStatus("green", "dot", "running");
+            schedule(run);
         }
 
-        node.on("input", function (msg, send, done) {
-            done = done || function (err) { if (err) { node.error(err, msg); } };
+        // Runs that a command is meant for: the one of this topic, or all of them with msg.loop.all
+        function targets(msg, over) {
+            if (over && over.all === true) { return Array.from(runs.values()); }
+            const run = runs.get(keyOf(msg));
+            return run ? [run] : [];
+        }
 
-            const over = msg.loop;
-            if (over !== undefined && over !== null && typeof over === "object") {
+        function reportStatus(msg, over) {
+            const list = targets(msg, over);
+            if (list.length === 0) {
+                const m = RED.util.cloneMessage(msg);
+                m.payload = "status";
+                m.loopstate = { state: "idle" };
+                node.send([null, m]);
+                return;
+            }
+            list.forEach((run) => {
+                const m = RED.util.cloneMessage(run.msg);
+                m.payload = "status";
+                m.loopstate = stateOf(run);
+                node.send([null, m]);
+            });
+        }
+
+        function handle(msg, done) {
+            const over = msg.loop !== null && typeof msg.loop === "object" ? msg.loop : undefined;
+            const command = over && typeof over.command === "string" ? over.command.toLowerCase() : null;
+            const byPayload = (word) => node.pausecontrol && isCommand(msg.payload, word);
+
+            let action = "start";
+            if (command === "pause" || byPayload("pause")) {
+                action = "pause";
+            } else if (command === "resume" || byPayload("resume")) {
+                action = "resume";
+            } else if (command === "status" || byPayload("status")) {
+                action = "status";
+            } else if (command === "stop" || isCommand(msg.payload, "stop")) {
+                action = "stop";
+            }
+
+            // While a loop runs the new messages are not wanted, not even their settings
+            if (action === "start" && node.concurrency === "ignore" && runs.has(keyOf(msg))) {
+                done();
+                return;
+            }
+
+            if (over) {
                 const problem = applyOverrides(over);
                 if (problem) {
                     node.error(problem, msg);
@@ -237,28 +380,73 @@ module.exports = function (RED) {
                 }
             }
 
-            const command = over && typeof over.command === "string" ? over.command.toLowerCase() : null;
-            const byPayload = (word) => node.pausecontrol && isCommand(msg.payload, word);
-
             try {
-                if (command === "pause" || byPayload("pause")) {
-                    pause(msg);
-                } else if (command === "resume" || byPayload("resume")) {
-                    resume(msg);
-                } else if (command === "stop" || isCommand(msg.payload, "stop")) {
-                    stop(msg);
-                } else {
-                    start(msg);
+                switch (action) {
+                    case "pause":
+                        targets(msg, over).forEach((run) => pause(run, msg));
+                        break;
+                    case "resume":
+                        targets(msg, over).forEach((run) => resume(run, msg));
+                        break;
+                    case "status":
+                        reportStatus(msg, over);
+                        break;
+                    case "stop": {
+                        const list = targets(msg, over);
+                        if (list.length === 0) {
+                            stop(msg, null);
+                        } else {
+                            list.forEach((run) => stop(msg, run));
+                        }
+                        break;
+                    }
+                    default:
+                        start(msg);
                 }
                 done();
             } catch (err) {
                 node.status({ fill: "red", shape: "ring", text: err.message });
                 done(err);
             }
+        }
+
+        // Reads the settings that are msg., flow., global. or env. values
+        function resolveTyped(msg) {
+            return Promise.all(TYPED_FIELDS.filter((field) => types[field] !== "num").map((field) => new Promise((resolve, reject) => {
+                RED.util.evaluateNodeProperty(config[field], types[field], node, msg, (err, value) => {
+                    const number = Number(value);
+                    if (err || value === undefined || value === null || value === "" || !isFinite(number)) {
+                        node.status({ fill: "red", shape: "ring", text: `${field} must be a number` });
+                        reject(new Error(`Invalid value for ${field} (${types[field]}.${config[field]}), value must be a number`));
+                        return;
+                    }
+                    node[field] = field === "duration" || field === "maxtimeout" ? Math.max(number, 0) : number;
+                    resolve();
+                });
+            })));
+        }
+
+        // Messages are handled one after the other, also when a setting has to be read from the context first
+        let queue = Promise.resolve();
+
+        node.on("input", function (msg, send, done) {
+            done = done || function (err) { if (err) { node.error(err, msg); } };
+
+            if (!hasTyped) {
+                handle(msg, done);
+                return;
+            }
+            queue = queue
+                .then(() => resolveTyped(msg))
+                .then(() => handle(msg, done), (err) => {
+                    node.error(err.message, msg);
+                    done();
+                });
         });
 
         node.on("close", function () {
-            endLoop();
+            runs.forEach((run) => clearTimers(run));
+            runs.clear();
             node.status({});
         });
     }
