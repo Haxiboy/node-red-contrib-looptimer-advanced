@@ -145,9 +145,10 @@ module.exports = function (RED) {
 
         function onDeadline(run) {
             run.timer = null;
+            // The loop is removed before the status is set, so in "pertopic" mode the count does not include it
+            endLoop(run);
             setStatus("red", "ring", "timeout reached");
             sendControl(run.msg, "timeout", run, "finished");
-            endLoop(run);
         }
 
         function onTick(run) {
@@ -168,8 +169,8 @@ module.exports = function (RED) {
 
             if (run.limit > 0 && count >= run.limit) {
                 node.send([cp, controlMsg(run.msg, "max loops reached", run, "finished")]);
-                setStatus("red", "ring", "max loops reached");
                 endLoop(run);
+                setStatus("red", "ring", "max loops reached");
                 return;
             }
 
@@ -178,16 +179,16 @@ module.exports = function (RED) {
                 if ((count + 1) * run.duration > run.maxtimeout) {
                     // Kept from 0.0.x: the last loop message is repeated together with the "timeout" message.
                     node.send([cp, controlMsg(run.msg, "timeout", run, "finished")]);
-                    setStatus("red", "ring", "timeout reached");
                     endLoop(run);
+                    setStatus("red", "ring", "timeout reached");
                     return;
                 }
                 setStatus("green", "dot", "running");
                 schedule(run);
             } else {
+                endLoop(run);
                 setStatus("red", "ring", "timeout reached");
                 sendControl(run.msg, "timeout", run, "finished");
-                endLoop(run);
             }
         }
 

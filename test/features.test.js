@@ -206,6 +206,21 @@ describe("looptimer-advanced 1.1.0", function () {
                 n1.receive({ payload: "stop", loop: { all: true } });
             });
         });
+
+        it("pertopic: a finished loop is no longer counted in the status", function () {
+            return setup({ duration: "40", units: "Millisecond", concurrency: "pertopic" }, async (n1, got) => {
+                let last = null;
+                n1.status = (s) => { last = s; };
+                // b ticks only much later, so the status after a ends comes from the end of a alone
+                n1.receive({ payload: "x", topic: "a", loop: { duration: 30, maxloops: 1 } });
+                n1.receive({ payload: "x", topic: "b", loop: { duration: 2000, maxloops: 100 } });
+                last.text.should.equal("2 running");
+                await sleep(120);
+                payloads(got.ctl).should.eql(["max loops reached"]);
+                last.text.should.equal("1 running");
+                n1.receive({ payload: "stop", loop: { all: true } });
+            });
+        });
     });
 
     describe("status command", function () {

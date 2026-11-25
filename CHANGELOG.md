@@ -2,6 +2,15 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
 
+## [1.1.2]
+
+### Fixed
+- In the per-topic mode the node status counted a loop that had just ended (max loops or timeout) until the next tick of another loop.
+- The label of output 2 in the editor is `status msg` instead of `stopped msg`, as it sends all status messages.
+
+### Changed
+- Releases are published to npm from GitHub Actions with trusted publishing (OIDC) and provenance.
+
 ## [1.1.1]
 
 ### Fixed
