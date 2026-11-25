@@ -1,8 +1,8 @@
 # Changelog
 
-This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
+The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
 
-## [1.1.2]
+## [1.1.2] - 2026-11-25
 
 ### Fixed
 - In the per-topic mode the node status counted a loop that had just ended (max loops or timeout) until the next tick of another loop.
@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on
 ### Changed
 - Releases are published to npm from GitHub Actions with trusted publishing (OIDC) and provenance.
 
-## [1.1.1]
+## [1.1.1] - 2026-11-25
 
 ### Fixed
 - Commands (`stop`, `pause`, `resume`, `status`) and messages ignored while a loop runs no longer need the typed settings. A `stop` without e.g. `msg.interval` used to fail with an error and the loop kept running. The settings are now only read for a message that starts a loop.
@@ -19,7 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on
 - The loop interval has to be greater than 0. An interval of 0 (also `msg.loop.duration`, or a typed value) made every tick due at once and, without a loop limit, flooded the output forever. It is now rejected with an error and no loop is started. Non-finite numbers (`Infinity`) are rejected in all numeric `msg.loop` overrides. A maximum timeout of `0` still works.
 - `msg.loop` overrides are applied all or nothing. `{ units: "Minute", duration: "abc" }` reported the error but left the units changed for the later messages.
 
-## [1.1.0]
+## [1.1.0] - 2026-10-27
 
 All new settings are off by default (or default to the old behavior), existing flows keep working unchanged.
 
@@ -36,7 +36,7 @@ All new settings are off by default (or default to the old behavior), existing f
 - The ticks are due at fixed times after the start instead of one interval after the previous tick, so a long loop does not drift. The schedule is kept across a pause, and a loop that was stalled for more than an interval carries on from now instead of sending a burst.
 - Payload `status` is a command when payload commands are on (the setting is now called *Pause / resume / status with payload*). Existing nodes have it off.
 
-## [1.0.0]
+## [1.0.0] - 2026-10-15
 
 ### Added
 - Pause / resume via payload (opt-in per node) or `msg.loop.command`; `paused` / `resumed` on output 2 and `msg.pauseduration` after a resume (#7).
@@ -56,3 +56,9 @@ All new settings are off by default (or default to the old behavior), existing f
 
 ## [0.0.12] and earlier
 See the git history.
+
+[1.1.2]: https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/compare/0.0.12...v1.0.0
+[0.0.12]: https://github.com/Haxiboy/node-red-contrib-looptimer-advanced/releases/tag/0.0.12
