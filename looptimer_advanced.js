@@ -13,6 +13,9 @@ module.exports = function (RED) {
     // Settings that can be a msg., flow., global. or env. value instead of a number (typed inputs).
     const TYPED_FIELDS = ["duration", "maxloops", "maxtimeout"];
 
+    // setTimeout runs a delay above this after 1 ms (32-bit overflow), so longer waits are split into chunks.
+    const MAX_DELAY = 2147483647;
+
     function toMs(unit, amount) {
         if (!Object.prototype.hasOwnProperty.call(UNIT_MS, unit)) {
             throw new Error(`Invalid unit: ${unit}`);
@@ -34,7 +37,9 @@ module.exports = function (RED) {
         const hasTyped = TYPED_FIELDS.some((field) => types[field] !== "num");
 
         node.units = config.units || "Second";
-        node.duration = types.duration === "num" ? (config.duration || 5) : 5;
+        // The loop interval has to be a finite number > 0, anything else falls back to the default
+        const configDuration = Number(config.duration || 5);
+        node.duration = types.duration === "num" && isFinite(configDuration) && configDuration > 0 ? configDuration : 5;
         node.maxloops = types.maxloops === "num" ? (config.maxloops || 100) : 100;
         node.maxtimeoutunits = config.maxtimeoutunits || "Hour";
         node.maxtimeout = types.maxtimeout === "num" ? (config.maxtimeout || 1) : 1;
@@ -49,7 +54,6 @@ module.exports = function (RED) {
         node.pausetimeoutunits = Object.prototype.hasOwnProperty.call(UNIT_MS, config.pausetimeoutunits) ? config.pausetimeoutunits : "Minute";
         node.pauseaction = config.pauseaction === "stop" ? "stop" : "resume";
 
-        if (node.duration <= 0) { node.duration = 0; }
         if (node.maxtimeout <= 0) { node.maxtimeout = 0; }
 
         // Runtime state of the running loops: one per node, or one per msg.topic in "pertopic" mode.
@@ -72,6 +76,16 @@ module.exports = function (RED) {
                 });
             } else {
                 node.status({ fill: fill, shape: shape, text: text });
+            }
+        }
+
+        // Calls fn at the absolute time due, also when that is more than MAX_DELAY away. The timer is run[prop].
+        function armAt(run, prop, due, fn) {
+            const left = due - Date.now();
+            if (left > MAX_DELAY) {
+                run[prop] = setTimeout(() => armAt(run, prop, due, fn), MAX_DELAY);
+            } else {
+                run[prop] = setTimeout(fn, Math.max(0, left));
             }
         }
 
@@ -126,7 +140,7 @@ module.exports = function (RED) {
             const deadline = run.t0 + run.maxtimeout;
             const deadlineFirst = deadline < tickDue;
             const due = deadlineFirst ? deadline : tickDue;
-            run.timer = setTimeout(deadlineFirst ? () => onDeadline(run) : () => onTick(run), Math.max(0, due - Date.now()));
+            armAt(run, "timer", due, deadlineFirst ? () => onDeadline(run) : () => onTick(run));
         }
 
         function onDeadline(run) {
@@ -199,10 +213,10 @@ module.exports = function (RED) {
             if (node.pausetimeout > 0) {
                 const wait = toMs(node.pausetimeoutunits, node.pausetimeout);
                 const action = node.pauseaction;
-                run.pauseTimer = setTimeout(() => {
+                armAt(run, "pauseTimer", Date.now() + wait, () => {
                     run.pauseTimer = null;
                     if (action === "stop") { stop(run.msg, run, "pause timeout"); } else { resume(run, run.msg, "pause timeout"); }
-                }, wait);
+                });
             }
         }
 
@@ -220,24 +234,30 @@ module.exports = function (RED) {
             schedule(run);
         }
 
-        // Validates and applies msg.loop overrides. Returns an error text, or null when everything is fine.
+        // Validates the msg.loop overrides and applies them only when all of them are valid.
+        // Returns an error text, or null when everything is fine.
         function applyOverrides(over) {
+            const pending = [];
             const checkUnit = (key, prop) => {
                 if (over[key] === undefined) { return null; }
                 if (!Object.prototype.hasOwnProperty.call(UNIT_MS, over[key])) {
                     node.status({ fill: "red", shape: "ring", text: `Invalid Attribute msg.loop.${key}` });
                     return `Invalid Attribute: msg.loop.${key}, allowed values are ${UNIT_LIST}`;
                 }
-                node[prop] = over[key];
+                pending.push(() => { node[prop] = over[key]; });
                 return null;
             };
-            const checkNumber = (key, prop) => {
+            const checkNumber = (key, prop, positive) => {
                 if (over[key] === undefined) { return null; }
-                if (typeof over[key] !== "number" || isNaN(over[key])) {
+                if (typeof over[key] !== "number" || !isFinite(over[key])) {
                     node.status({ fill: "red", shape: "ring", text: `msg.loop.${key} must be a number` });
                     return `Invalid Attribute: msg.loop.${key}, value must be a number`;
                 }
-                node[prop] = over[key];
+                if (positive && over[key] <= 0) {
+                    node.status({ fill: "red", shape: "ring", text: `msg.loop.${key} must be greater than 0` });
+                    return `Invalid Attribute: msg.loop.${key}, value must be a positive number`;
+                }
+                pending.push(() => { node[prop] = over[key]; });
                 return null;
             };
             const checkBoolean = (key, prop) => {
@@ -246,7 +266,7 @@ module.exports = function (RED) {
                     node.status({ fill: "red", shape: "ring", text: `msg.loop.${key} must be a boolean` });
                     return `Invalid Attribute: msg.loop.${key}, value must be a boolean`;
                 }
-                node[prop] = over[key];
+                pending.push(() => { node[prop] = over[key]; });
                 return null;
             };
             const checkAction = () => {
@@ -255,12 +275,12 @@ module.exports = function (RED) {
                     node.status({ fill: "red", shape: "ring", text: "Invalid Attribute msg.loop.pauseaction" });
                     return "Invalid Attribute: msg.loop.pauseaction, allowed values are resume and stop";
                 }
-                node.pauseaction = over.pauseaction;
+                pending.push(() => { node.pauseaction = over.pauseaction; });
                 return null;
             };
-            return checkBoolean("totalcount", "totalcount") ||
+            const problem = checkBoolean("totalcount", "totalcount") ||
                 checkUnit("units", "units") ||
-                checkNumber("duration", "duration") ||
+                checkNumber("duration", "duration", true) ||
                 checkUnit("maxtimeoutunits", "maxtimeoutunits") ||
                 checkNumber("maxtimeout", "maxtimeout") ||
                 checkNumber("maxloops", "maxloops") ||
@@ -269,6 +289,9 @@ module.exports = function (RED) {
                 checkNumber("pausetimeout", "pausetimeout") ||
                 checkUnit("pausetimeoutunits", "pausetimeoutunits") ||
                 checkAction();
+            if (problem) { return problem; }
+            pending.forEach((apply) => apply());
+            return null;
         }
 
         function start(msg) {
@@ -349,8 +372,13 @@ module.exports = function (RED) {
             });
         }
 
-        function handle(msg, done) {
-            const over = msg.loop !== null && typeof msg.loop === "object" ? msg.loop : undefined;
+        function loopOf(msg) {
+            return msg.loop !== null && typeof msg.loop === "object" ? msg.loop : undefined;
+        }
+
+        // What a message asks for: start, stop, pause, resume or status
+        function actionOf(msg) {
+            const over = loopOf(msg);
             const command = over && typeof over.command === "string" ? over.command.toLowerCase() : null;
             const byPayload = (word) => node.pausecontrol && isCommand(msg.payload, word);
 
@@ -364,9 +392,19 @@ module.exports = function (RED) {
             } else if (command === "stop" || isCommand(msg.payload, "stop")) {
                 action = "stop";
             }
+            return action;
+        }
 
-            // While a loop runs the new messages are not wanted, not even their settings
-            if (action === "start" && node.concurrency === "ignore" && runs.has(keyOf(msg))) {
+        // While a loop runs the new messages are not wanted, not even their settings
+        function isIgnored(msg, action) {
+            return action === "start" && node.concurrency === "ignore" && runs.has(keyOf(msg));
+        }
+
+        function handle(msg, done) {
+            const over = loopOf(msg);
+            const action = actionOf(msg);
+
+            if (isIgnored(msg, action)) {
                 done();
                 return;
             }
@@ -420,7 +458,12 @@ module.exports = function (RED) {
                         reject(new Error(`Invalid value for ${field} (${types[field]}.${config[field]}), value must be a number`));
                         return;
                     }
-                    node[field] = field === "duration" || field === "maxtimeout" ? Math.max(number, 0) : number;
+                    if (field === "duration" && number <= 0) {
+                        node.status({ fill: "red", shape: "ring", text: "duration must be greater than 0" });
+                        reject(new Error(`Invalid value for ${field} (${types[field]}.${config[field]}), value must be a positive number`));
+                        return;
+                    }
+                    node[field] = field === "maxtimeout" ? Math.max(number, 0) : number;
                     resolve();
                 });
             })));
@@ -436,8 +479,12 @@ module.exports = function (RED) {
                 handle(msg, done);
                 return;
             }
+            // The settings are only read for a message that starts a loop, commands and ignored messages do not need them
             queue = queue
-                .then(() => resolveTyped(msg))
+                .then(() => {
+                    const action = actionOf(msg);
+                    return action === "start" && !isIgnored(msg, action) ? resolveTyped(msg) : null;
+                })
                 .then(() => handle(msg, done), (err) => {
                     node.error(err.message, msg);
                     done();

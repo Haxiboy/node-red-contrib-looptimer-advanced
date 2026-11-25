@@ -375,15 +375,108 @@ describe("looptimer-advanced 1.1.0", function () {
         it("keeps the order of the messages, a stop right after a start works", function () {
             return setup({ duration: "d", durationType: "msg", maxloops: "100", units: "Millisecond" }, async (n1, got) => {
                 n1.receive({ payload: "go", d: 50 });
-                n1.receive({ payload: "stop", d: 50 });
+                n1.receive({ payload: "stop" });
                 await sleep(300);
                 got.out.length.should.equal(1);
+                got.errors.length.should.equal(0);
                 payloads(got.ctl).should.eql(["stopped"]);
+            });
+        });
+
+        it("a stop without the typed property stops the running loop", function () {
+            return setup({ duration: "d", durationType: "msg", maxloops: "100", units: "Millisecond" }, async (n1, got) => {
+                n1.receive({ payload: "go", d: 30 });
+                await sleep(100);
+                n1.receive({ payload: "stop" });
+                await sleep(50);
+                const sent = got.out.length;
+                sent.should.be.above(1);
+                got.errors.length.should.equal(0);
+                payloads(got.ctl).should.eql(["stopped"]);
+                await sleep(150);
+                got.out.length.should.equal(sent);
+            });
+        });
+
+        it("pause, resume and status commands do not need the typed property", function () {
+            return setup({ duration: "d", durationType: "msg", maxloops: "100", units: "Millisecond", pausecontrol: true }, async (n1, got) => {
+                n1.receive({ payload: "go", d: 30 });
+                n1.receive({ payload: "status" });
+                n1.receive({ payload: "pause" });
+                n1.receive({ payload: "resume" });
+                n1.receive({ payload: "go", loop: { command: "stop" } });
+                await sleep(100);
+                got.errors.length.should.equal(0);
+                payloads(got.ctl).should.eql(["status", "paused", "resumed", "stopped"]);
+            });
+        });
+
+        it("a message that is ignored while a loop runs does not read the typed settings", function () {
+            return setup({ duration: "d", durationType: "msg", maxloops: "100", units: "Millisecond", concurrency: "ignore" }, async (n1, got) => {
+                n1.receive({ payload: "go", d: 30 });
+                n1.receive({ payload: "again" });
+                await sleep(50);
+                got.errors.length.should.equal(0);
+                n1.receive({ payload: "stop" });
+            });
+        });
+
+        it("rejects an interval of 0 or less and does not start a loop", function () {
+            return setup({ duration: "d", durationType: "msg", units: "Millisecond" }, async (n1, got) => {
+                n1.receive({ payload: "go", d: 0 });
+                n1.receive({ payload: "go", d: -5 });
+                await sleep(100);
+                got.errors.length.should.equal(2);
+                got.out.length.should.equal(0);
             });
         });
     });
 
     describe("msg.loop validation", function () {
+        it("rejects an interval of 0, a negative one and Infinity, nothing is sent", function () {
+            return setup({ duration: "20", units: "Millisecond" }, async (n1, got) => {
+                n1.receive({ payload: "go", loop: { duration: 0 } });
+                n1.receive({ payload: "go", loop: { duration: -1 } });
+                n1.receive({ payload: "go", loop: { duration: Infinity } });
+                n1.receive({ payload: "go", loop: { duration: NaN } });
+                await sleep(100);
+                got.errors.length.should.equal(4);
+                got.out.length.should.equal(0);
+            });
+        });
+
+        it("rejects Infinity in the other numeric overrides", function () {
+            return setup({ duration: "20", units: "Millisecond" }, async (n1, got) => {
+                n1.receive({ payload: "go", loop: { maxtimeout: Infinity } });
+                n1.receive({ payload: "go", loop: { maxloops: Infinity } });
+                n1.receive({ payload: "go", loop: { pausetimeout: Infinity } });
+                got.errors.length.should.equal(3);
+                got.out.length.should.equal(0);
+            });
+        });
+
+        it("still accepts maxtimeout 0", function () {
+            return setup({ duration: "20", units: "Millisecond", maxloops: "5" }, async (n1, got) => {
+                n1.receive({ payload: "go", loop: { maxtimeout: 0 } });
+                await sleep(100);
+                got.errors.length.should.equal(0);
+                got.out.length.should.equal(1);
+                payloads(got.ctl).should.eql(["timeout"]);
+            });
+        });
+
+        it("an invalid override changes nothing, the previous settings stay in effect", function () {
+            return setup({ duration: "30", units: "Millisecond", maxloops: "2" }, async (n1, got) => {
+                n1.receive({ payload: "go", loop: { units: "Hour", duration: "abc" } });
+                got.errors.length.should.equal(1);
+                n1.units.should.equal("Millisecond");
+                n1.receive({ payload: "go" });
+                await sleep(300);
+                got.out.length.should.equal(3);
+                payloads(got.ctl).should.eql(["max loops reached"]);
+            });
+        });
+
         it("rejects invalid values of the new properties", function () {
             return setup({ duration: "20", units: "Millisecond" }, async (n1, got) => {
                 n1.receive({ payload: "go", loop: { sendfirst: "yes" } });
@@ -393,6 +486,42 @@ describe("looptimer-advanced 1.1.0", function () {
                 n1.receive({ payload: "go", loop: { pauseaction: "explode" } });
                 got.errors.length.should.equal(5);
                 got.out.length.should.equal(0);
+            });
+        });
+    });
+
+    describe("long timers", function () {
+        // Node runs a setTimeout above 2^31-1 ms after 1 ms, so these must not fire early
+        it("an interval of 30 days does not tick right away", function () {
+            return setup({ duration: "30", units: "Day", maxtimeout: "100", maxtimeoutunits: "Day", maxloops: "5", sendfirst: false }, async (n1, got) => {
+                n1.receive({ payload: "go" });
+                await sleep(150);
+                got.out.length.should.equal(0);
+                got.ctl.length.should.equal(0);
+                n1.receive({ payload: "stop" });
+                await sleep(20);
+                payloads(got.ctl).should.eql(["stopped"]);
+            });
+        });
+
+        it("a max timeout of 30 days does not fire right away", function () {
+            return setup({ duration: "20", units: "Millisecond", maxtimeout: "30", maxtimeoutunits: "Day", maxloops: "3" }, async (n1, got) => {
+                n1.receive({ payload: "go" });
+                await sleep(300);
+                got.out.length.should.equal(4);
+                payloads(got.ctl).should.eql(["max loops reached"]);
+            });
+        });
+
+        it("a pause timeout of 30 days does not fire right away", function () {
+            return setup({ duration: "20", units: "Millisecond", maxloops: "100", pausecontrol: true, pausetimeout: "30", pausetimeoutunits: "Day", pauseaction: "stop" }, async (n1, got) => {
+                n1.receive({ payload: "go" });
+                n1.receive({ payload: "pause" });
+                await sleep(150);
+                payloads(got.ctl).should.eql(["paused"]);
+                n1.receive({ payload: "stop" });
+                await sleep(20);
+                payloads(got.ctl).should.eql(["paused", "stopped"]);
             });
         });
     });

@@ -2,6 +2,14 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/) from 1.0.0 on.
 
+## [1.1.1]
+
+### Fixed
+- Commands (`stop`, `pause`, `resume`, `status`) and messages ignored while a loop runs no longer need the typed settings. A `stop` without e.g. `msg.interval` used to fail with an error and the loop kept running. The settings are now only read for a message that starts a loop.
+- Intervals, maximum timeouts and pause timeouts longer than about 24.8 days (2^31-1 ms) fired after a millisecond, because Node.js clamps such a delay. They now wait the full time.
+- The loop interval has to be greater than 0. An interval of 0 (also `msg.loop.duration`, or a typed value) made every tick due at once and, without a loop limit, flooded the output forever. It is now rejected with an error and no loop is started. Non-finite numbers (`Infinity`) are rejected in all numeric `msg.loop` overrides. A maximum timeout of `0` still works.
+- `msg.loop` overrides are applied all or nothing. `{ units: "Minute", duration: "abc" }` reported the error but left the units changed for the later messages.
+
 ## [1.1.0]
 
 All new settings are off by default (or default to the old behavior), existing flows keep working unchanged.

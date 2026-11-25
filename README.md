@@ -89,7 +89,7 @@ A `status` command sends a message with payload `status` and [`msg.loopstate`](#
 
 | Property | Type | Description |
 |---|---|---|
-| `msg.loop.duration` | number | Loop interval |
+| `msg.loop.duration` | number | Loop interval, must be greater than 0 (intervals and timeouts longer than ~24.8 days work too) |
 | `msg.loop.units` | string | `Millisecond`, `Second`, `Minute`, `Hour`, `Day` |
 | `msg.loop.maxloops` | number | Maximum number of loops |
 | `msg.loop.totalcount` | boolean | *Max Loops* counts the first message too |
@@ -150,7 +150,7 @@ The setting **New message** decides what a message does that arrives while a loo
 
 ## Typed settings
 
-*Loop Every*, *Max Loops* and *Max Timeout* are typed inputs: next to a fixed number they can be read from `msg.`, `flow.`, `global.` or an environment variable (`env`). The value is read for every message that starts a loop, and has to be a number, otherwise the node reports an error and does not start. Overrides in `msg.loop` are applied on top.
+*Loop Every*, *Max Loops* and *Max Timeout* are typed inputs: next to a fixed number they can be read from `msg.`, `flow.`, `global.` or an environment variable (`env`). The value is read only for messages that start a loop (commands like `stop` do not need it), and has to be a number (the interval greater than 0), otherwise the node reports an error and does not start. Overrides in `msg.loop` are applied on top.
 
 ## Versioning
 

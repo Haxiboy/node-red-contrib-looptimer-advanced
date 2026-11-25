@@ -158,7 +158,7 @@
 		<dt class="optional">loop.all <span class="property-type">boolean</span></dt>
 		<dd>With <code>true</code> a command applies to all loops of the node (see "New message" below).</dd>
 		<dt class="optional">loop.duration, loop.units <span class="property-type">number, string</span></dt>
-		<dd>Override the loop interval. Units: <code>Millisecond</code>, <code>Second</code>, <code>Minute</code>, <code>Hour</code>, <code>Day</code>.</dd>
+		<dd>Override the loop interval, which must be greater than 0. Units: <code>Millisecond</code>, <code>Second</code>, <code>Minute</code>, <code>Hour</code>, <code>Day</code>.</dd>
 		<dt class="optional">loop.maxtimeout, loop.maxtimeoutunits <span class="property-type">number, string</span></dt>
 		<dd>Override the maximum timeout.</dd>
 		<dt class="optional">loop.maxloops <span class="property-type">number</span></dt>
@@ -182,6 +182,6 @@
 	<p><b>Counting.</b> By default the first message is not part of the loop, so Max Loops <code>5</code> gives <code>6</code> messages. Tick "Max Loops counts the first message too" to get exactly the configured number: <code>1</code> is a single message, <code>0</code> sends nothing and <code>-1</code> is unlimited. Without "Send the first message immediately" the first message goes out after the first interval, so Max Loops <code>5</code> gives <code>5</code> messages.</p>
 	<p><b>New message.</b> By default a new message restarts the loop. "is ignored while a loop runs" drops it (also its settings) until the loop is over. "starts a separate loop per msg.topic" runs one loop per topic, <code>stop</code>, <code>pause</code>, <code>resume</code> and <code>status</code> then apply to the loop of the topic of the command, or to all loops with <code>msg.loop.all = true</code>.</p>
 	<p><b>Pause.</b> Pausing freezes the remaining time of the current interval, the loop counter and the timeout budget. With a pause timeout the loop is resumed or stopped automatically after that time.</p>
-	<p><b>Typed settings.</b> Loop Every, Max Loops and Max Timeout can be read from <code>msg.</code>, <code>flow.</code>, <code>global.</code> or <code>env</code> instead of being a fixed number.</p>
+	<p><b>Typed settings.</b> Loop Every, Max Loops and Max Timeout can be read from <code>msg.</code>, <code>flow.</code>, <code>global.</code> or <code>env</code> instead of being a fixed number. They are only read for messages that start a loop, commands like <code>stop</code> do not need them. The interval has to be greater than 0.</p>
 	<p>Overrides in <code>msg.loop</code> stay in effect for the following messages.</p>
 </script>
